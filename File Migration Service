@@ -1,0 +1,49 @@
+# PREREQUISITE 1: Ensure you have a H: drive in your file explorer (If you wish to relocate a different drive, simply modify the SourceDrive character accordingly)
+# PREREQUISITE 2: Ensure you have a folder in your OneDrive called "Documents"
+#
+# Define paths
+$SourceDrive = "H:\"
+$DestinationFolder = "$env:OneDrive\Documents\"
+$SpreadsheetPath = "$env:USERPROFILE\Downloads\UserTracking.xlsx"
+
+# Ensure destination exists
+if (!(Test-Path $DestinationFolder)) {
+    New-Item -ItemType Directory -Path $DestinationFolder | Out-Null
+}
+
+# Get the list of network shares
+$NetworkShares = Get-ChildItem -Path $SourceDrive
+
+# Copy the files to OneDrive Documents
+foreach ($Share in $NetworkShares) {
+    $TargetPath = Join-Path -Path $DestinationFolder -ChildPath $Share.Name
+    Copy-Item -Path $Share.FullName -Destination $TargetPath -Recurse -Force
+}
+
+# Create a tracking spread sheet to track contents of files or update the tracking spreadsheet
+$Excel = New-Object -ComObject Excel.Application
+$Excel.Visible = $false
+
+# Check if the spreadsheet already exists
+if (Test-Path $SpreadsheetPath) {
+    $Workbook = $Excel.Workbooks.Open($SpreadsheetPath)
+} else {
+    $Workbook = $Excel.Workbooks.Add()
+}
+
+$Worksheet = $Workbook.Worksheets.Item(1)
+
+# Define headers (only if new file)
+if (!(Test-Path $SpreadsheetPath)) {
+    $Headers = @("Name", "Transferred", "Contacted", "Contact Date", "Assist Date", "Extra Help Needed")
+    for ($i = 0; $i -lt $Headers.Length; $i++) {
+        $Worksheet.Cells.Item(1, $i + 1).Value2 = $Headers[$i]
+    }
+}
+
+# Save and close the workbook
+$Workbook.SaveAs($SpreadsheetPath)
+$Workbook.Close()
+$Excel.Quit()
+
+Write-Output "Files have been copied from H: drive to OneDrive Documents, and tracking is saved in your Downloads folder."
