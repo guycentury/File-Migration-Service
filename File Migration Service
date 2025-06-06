@@ -5,22 +5,35 @@
 $SourceDrive = "H:\"
 $DestinationFolder = "$env:OneDrive\Documents\"
 $SpreadsheetPath = "$env:USERPROFILE\Downloads\UserTracking.xlsx"
+$UserName = $env:USERNAME  # Get the logged-in user's name
 
 # Ensure destination exists
 if (!(Test-Path $DestinationFolder)) {
     New-Item -ItemType Directory -Path $DestinationFolder | Out-Null
 }
 
-# Get the list of network shares
+# Get list of network shares
 $NetworkShares = Get-ChildItem -Path $SourceDrive
 
-# Copy the files to OneDrive Documents
+# Copy files to OneDrive Documents and track details
+$FileDetails = @()
+
 foreach ($Share in $NetworkShares) {
     $TargetPath = Join-Path -Path $DestinationFolder -ChildPath $Share.Name
     Copy-Item -Path $Share.FullName -Destination $TargetPath -Recurse -Force
+
+    # Get file size
+    $Size = (Get-ChildItem -Path $Share.FullName -Recurse | Measure-Object -Property Length -Sum).Sum
+
+    # Store tracking details
+    $FileDetails += [PSCustomObject]@{
+        UserName = $UserName
+        FileName = $Share.Name
+        FileSizeBytes = $Size
+    }
 }
 
-# Create a tracking spread sheet to track contents of files or update the tracking spreadsheet
+# Create or update the tracking spreadsheet
 $Excel = New-Object -ComObject Excel.Application
 $Excel.Visible = $false
 
@@ -35,10 +48,19 @@ $Worksheet = $Workbook.Worksheets.Item(1)
 
 # Define headers (only if new file)
 if (!(Test-Path $SpreadsheetPath)) {
-    $Headers = @("Name", "Transferred", "Contacted", "Contact Date", "Assist Date", "Extra Help Needed")
+    $Headers = @("User Name", "File Name", "File Size (Bytes)")
     for ($i = 0; $i -lt $Headers.Length; $i++) {
         $Worksheet.Cells.Item(1, $i + 1).Value2 = $Headers[$i]
     }
+}
+
+# Append data
+$Row = $Worksheet.UsedRange.Rows.Count + 1
+foreach ($Entry in $FileDetails) {
+    $Worksheet.Cells.Item($Row, 1).Value2 = $Entry.UserName
+    $Worksheet.Cells.Item($Row, 2).Value2 = $Entry.FileName
+    $Worksheet.Cells.Item($Row, 3).Value2 = $Entry.FileSizeBytes
+    $Row++
 }
 
 # Save and close the workbook
